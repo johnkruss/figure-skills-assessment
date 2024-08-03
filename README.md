@@ -114,3 +114,7 @@ Requirements:
 - You must use the [client-go](https://github.com/kubernetes/client-go) library.
 - Your script must perform a graceful restart, similar to kubectl rollout restart. Do not just delete pods.
 - You must use Go modules (no vendor directory).
+
+## Go Solution
+
+Check out `main.go` down in the `cmd/restart` directory
