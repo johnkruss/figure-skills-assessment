@@ -21,14 +21,14 @@ import (
 func main() {
 	kubeClient := setupClient()
 	allPods := loadAllPods(kubeClient)
-	matchingPods := findPodsContaining(allPods, "nginx")
-	deploysForPods := findDeploymentsForPods(matchingPods, kubeClient)
+	matchingPods := findPodsContaining(allPods, "database")
+	deploysForPods := findDeploymentsAndUpdate(matchingPods, kubeClient)
 	restartPods(deploysForPods, matchingPods, kubeClient)
 }
 
 //This function assumes all pods are part of a ReplicaSet and owning Deployment
 //If it isn't we probably shouldn't be touching it anyway
-func findDeploymentsForPods(pods []v1.Pod, client *kubernetes.Clientset) []v12.Deployment {
+func findDeploymentsAndUpdate(pods []v1.Pod, client *kubernetes.Clientset) []v12.Deployment {
 	var deployments []v12.Deployment
 	for _, pod := range pods {
 		var replicaSetName string
@@ -60,29 +60,36 @@ func findDeploymentsForPods(pods []v1.Pod, client *kubernetes.Clientset) []v12.D
 }
 
 func restartPods(deployments []v12.Deployment, pods []v1.Pod, client *kubernetes.Clientset) {
-	//find the specific container definition that should be restarted
+	//find the specific container definition that needs to be update to force a restart
 	for _, deployment := range deployments {
 		deploymentUpdated := false
 		for i, container := range deployment.Spec.Template.Spec.Containers {
 			for _, pod := range pods {
-				if container.Name == pod.Name {
-					deployment.Spec.Template.Spec.Containers[i].Env = append(container.Env, v1.EnvVar{
-						Name:  "FORCE_RESTART_TIME",
-						Value: time.Now().UTC().String(), // Use a timestamp to ensure it's unique
-					})
-					deploymentUpdated = true
-					break
+				for _, podContainer := range pod.Spec.Containers {
+					fmt.Println("Pod Container Name")
+					fmt.Println(podContainer.Name)
+					if container.Name == podContainer.Name {
+						fmt.Println("Found container to restart")
+						deployment.Spec.Template.Spec.Containers[i].Env = append(container.Env, v1.EnvVar{
+							Name:  "FORCE_RESTART_TIME",
+							Value: time.Now().UTC().String(), // Use a timestamp to ensure it's unique
+						})
+						deploymentUpdated = true
+						break
+					}
 				}
 			}
 		}
 		if deploymentUpdated {
+			fmt.Println("Restarting Deployment")
+			fmt.Println(deployment.Name)
 			client.AppsV1().Deployments("default").Update(context.TODO(), &deployment, metaV1.UpdateOptions{})
 		}
 	}
 }
 
 func findPodsContaining(pods []v1.Pod, searchString string) []v1.Pod {
-	found := []v1.Pod{}
+	var found []v1.Pod
 	for _, pod := range pods {
 		if strings.Contains(pod.Name, searchString) {
 			found = append(found, pod)
@@ -112,11 +119,11 @@ func setupClient() *kubernetes.Clientset {
 		panic(err)
 	}
 
-	clientset, err := kubernetes.NewForConfig(config)
+	client, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		panic(err)
 	}
 
-	return clientset
+	return client
 }
 

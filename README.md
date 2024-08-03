@@ -118,3 +118,15 @@ Requirements:
 ## Go Solution
 
 Check out `main.go` down in the `cmd/restart` directory
+
+This approach is fairly naive and wouldn't scale without optimization, but it works as follows:
+1. Retrieve all pods
+2. Search through pods to find any with a name containing our key word
+3. Now we backtrack from the pod up through the ReplicaSet to the deployment
+4. Now we follow that back down through the deployment template to match containers
+5. When we find a match
+   1. Update the template with a new environment var
+   2. Call it `FORCE_RESTART_TIME`
+   3. Make the value a timestamp so collisions are nearly impossible
+6. Now update the deployment
+   1. The new environment variable will trigger a rolling restart of pods within the updated ReplicaSet
