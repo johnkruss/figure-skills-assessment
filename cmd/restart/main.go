@@ -22,13 +22,13 @@ func main() {
 	kubeClient := setupClient()
 	allPods := loadAllPods(kubeClient)
 	matchingPods := findPodsContaining(allPods, "database")
-	deploysForPods := findDeploymentsAndUpdate(matchingPods, kubeClient)
+	deploysForPods := findDeploymentsForPods(matchingPods, kubeClient)
 	restartPods(deploysForPods, matchingPods, kubeClient)
 }
 
 //This function assumes all pods are part of a ReplicaSet and owning Deployment
 //If it isn't we probably shouldn't be touching it anyway
-func findDeploymentsAndUpdate(pods []v1.Pod, client *kubernetes.Clientset) []v12.Deployment {
+func findDeploymentsForPods(pods []v1.Pod, client *kubernetes.Clientset) []v12.Deployment {
 	var deployments []v12.Deployment
 	for _, pod := range pods {
 		var replicaSetName string
@@ -46,6 +46,7 @@ func findDeploymentsAndUpdate(pods []v1.Pod, client *kubernetes.Clientset) []v12
 		}
 
 		//Use the retrieved ReplicaSet to find the owning Deployment
+		//Worth noting this could produce duplicate deployments because we're simply appending a list
 		for _, owner := range replicaSet.OwnerReferences {
 			if owner.Kind == "Deployment" {
 				deployment, err := client.AppsV1().Deployments("default").Get(context.TODO(), owner.Name, metaV1.GetOptions{})
@@ -60,7 +61,7 @@ func findDeploymentsAndUpdate(pods []v1.Pod, client *kubernetes.Clientset) []v12
 }
 
 func restartPods(deployments []v12.Deployment, pods []v1.Pod, client *kubernetes.Clientset) {
-	//find the specific container definition that needs to be update to force a restart
+	//find the specific container definition that needs to be updated to force a restart
 	for _, deployment := range deployments {
 		deploymentUpdated := false
 		for i, container := range deployment.Spec.Template.Spec.Containers {
